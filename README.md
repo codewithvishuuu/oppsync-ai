@@ -21,15 +21,64 @@ The user retains full control — nothing is written to Notion or Calendar witho
 
 ## Architecture
 
-```
-Gmail → Opportunity Extraction (Gemini) → Review UI → Approve → Notion + Calendar
-                                                       Reject → No writes
+```mermaid
+flowchart TD
+    subgraph Browser["Browser / Review Dashboard"]
+        UI["Review UI\nApprove / Reject"]
+    end
+
+    subgraph App["Next.js Application"]
+        API["API Routes\n/scan  /confirm"]
+    end
+
+    subgraph Agent["Python Agent"]
+        direction TB
+        PS["SQLite Persistent State\n(already-processed check)"]
+        GF["Gmail Fetch"]
+        PF["Local Pre-Filter\n(28 opportunity signals)"]
+        GN["Gemini 3.1 Flash Lite\n(max 1 call per email)"]
+        DD["Deduplication\n(Notion + State)"]
+    end
+
+    subgraph Integrations["External Integrations"]
+        GM["Gmail API\n(read-only)"]
+        NO["Notion\nOpportunities DB"]
+        GC["Google Calendar\nDeadline Events"]
+    end
+
+    subgraph Policies["Guarded Writes"]
+        AP["Approval\n→ Notion + Calendar\n→ State: approved"]
+        RJ["Rejection\n→ No writes\n→ State: rejected"]
+    end
+
+    Browser -->|"scan request"| API
+    API -->|"invoke Python"| Agent
+    PS -->|"skip if processed"| GF
+    GF -->|"email metadata"| GM
+    GM -->|"email content"| PF
+    PF -->|"relevant emails only"| GN
+    GN -->|"structured opportunity"| DD
+    DD -->|"new opportunities"| UI
+    UI -->|"user decision"| API
+    API -->|"approve"| AP
+    API -->|"reject"| RJ
+    AP -->|"guarded write"| NO
+    AP -->|"guarded write"| GC
+    AP -->|"persist state"| PS
+    RJ -->|"persist state"| PS
+
+    style Browser fill:#e8f4fd,stroke:#2196F3
+    style App fill:#e8f5e9,stroke:#4CAF50
+    style Agent fill:#fff3e0,stroke:#FF9800
+    style Integrations fill:#fce4ec,stroke:#E91E63
+    style Policies fill:#f3e5f5,stroke:#9C27B0
 ```
 
 - **AI Provider:** Google Gemini (`gemini-3.1-flash-lite`)
 - **Execution Layer:** Swytchcode Runtime SDK
 - **Web Framework:** Next.js 15 (App Router)
 - **Backend:** Python 3.11+
+- **State:** SQLite (processed-email tracking for API savings)
 
 ## Features
 
@@ -146,12 +195,11 @@ oppsync-ai/
 │   ├── api/
 │   │   ├── scan/route.ts     # Email scan endpoint
 │   │   ├── confirm/route.ts  # Approval/rejection endpoint
-│   │   ├── health/route.ts   # Health check
-│   │   └── test-gemini/route.ts  # AI connectivity test
+│   │   └── health/route.ts   # Health check
 │   ├── page.tsx              # Main review UI
 │   └── layout.tsx            # Root layout
 ├── scripts/                  # Bridge scripts
-├── tests/                    # Unit tests (82 tests)
+├── tests/                    # Unit tests (96 tests)
 ├── logs/                     # Audit logs
 ├── .env.example              # Environment template
 ├── .gitignore                # Git ignore rules
@@ -166,7 +214,7 @@ oppsync-ai/
 python -m pytest tests/test_opportunities.py -v
 ```
 
-82 unit tests covering:
+96 unit tests covering:
 - Data models and validation
 - Deduplication logic
 - Notion/Calendar payload construction
