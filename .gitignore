@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Swytchcode runtime state
+.swytchcode/workspace.json
+.swytchcode/logs/
+.swytchcode/integrations/**/methods.json
+.swytchcode/integrations/**/wrekenfile.yaml
+.swytchcode/credentials.db
+
+# Build output
+.next/
+out/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Logs
+*.log
+*.jsonl
+npm-debug.log*
+logs/
+
+# Runtime
+*.key
+credentials*
+secrets*
+tokens*
+state.db

@@ -1,0 +1,54 @@
+{
+  "defaults": {
+    "on_violation": "fail",
+    "evaluation": "pre_execution"
+  },
+  "policies": [
+    {
+      "id": "no-calendar-deletes",
+      "target": [
+        "calendar.event.delete",
+        "calendar.clear.create",
+        "calendar.calendar.delete",
+        "calendar.me.calendarList.delete"
+      ],
+      "when": {
+        "field": "calendarId",
+        "operator": "exists"
+      },
+      "action": {
+        "type": "POLICY_BLOCKED",
+        "message": "Calendar delete operations are blocked by OppSync AI policy."
+      }
+    },
+    {
+      "id": "no-destructive-event-titles",
+      "target": [
+        "calendar.event.quickAdd.create"
+      ],
+      "when": {
+        "field": "text",
+        "operator": "matches",
+        "value": "delete|cancel|remove|clear"
+      },
+      "action": {
+        "type": "POLICY_BLOCKED",
+        "message": "Destructive event titles are blocked."
+      }
+    },
+    {
+      "id": "gmail-send-requires-approval",
+      "target": [
+        "gmail.user.send.create1"
+      ],
+      "when": {
+        "field": "userId",
+        "operator": "not_empty"
+      },
+      "action": {
+        "type": "POLICY_BLOCKED",
+        "message": "Direct email sends are blocked. Create a draft instead."
+      }
+    }
+  ]
+}
