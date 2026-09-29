@@ -2,6 +2,22 @@
 
 import { useState } from "react";
 
+interface EligibilitySignal {
+  criterion: string;
+  status: "match" | "mismatch" | "unknown";
+  detail: string;
+}
+
+interface Eligibility {
+  match_score: number | null;
+  eligibility: string;
+  matching_factors: string[];
+  potential_gaps: string[];
+  unknown_requirements: string[];
+  signals: EligibilitySignal[];
+  confidence: number;
+}
+
 interface Opportunity {
   index: number;
   name: string | null;
@@ -12,7 +28,16 @@ interface Opportunity {
   summary: string | null;
   confidence: number;
   source_email_id: string | null;
+  requirements?: unknown | null;
+  eligibility?: Eligibility | null;
 }
+
+const ELIGIBILITY_LABELS: Record<string, { text: string; color: string; bg: string }> = {
+  likely_eligible: { text: "Likely eligible", color: "#166534", bg: "#dcfce7" },
+  possible: { text: "Possibly eligible", color: "#854d0e", bg: "#fef9c3" },
+  unlikely_eligible: { text: "Likely not eligible", color: "#991b1b", bg: "#fee2e2" },
+  unknown: { text: "Eligibility unknown", color: "#374151", bg: "#e5e7eb" },
+};
 
 interface ScanResponse {
   status: string;
@@ -174,8 +199,43 @@ export default function Home() {
             {opp.url && <p style={{ margin: "0.25rem 0" }}><a href={opp.url} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb" }}>{opp.url}</a></p>}
             {opp.summary && <p style={{ margin: "0.5rem 0", color: "#6b7280", fontSize: "0.9rem" }}>{opp.summary}</p>}
 
+            {opp.eligibility && (
+              <div style={{ margin: "0.75rem 0", padding: "0.75rem", backgroundColor: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "6px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>
+                    Match: {opp.eligibility.match_score !== null ? `${opp.eligibility.match_score}%` : "Unknown"}
+                  </span>
+                  {(() => {
+                    const v = ELIGIBILITY_LABELS[opp.eligibility!.eligibility] ?? ELIGIBILITY_LABELS.unknown;
+                    return (
+                      <span style={{ padding: "0.1rem 0.4rem", borderRadius: "4px", fontSize: "0.75rem", backgroundColor: v.bg, color: v.color }}>
+                        {v.text}
+                      </span>
+                    );
+                  })()}
+                  <span style={{ fontSize: "0.75rem", color: "#9ca3af" }}>
+                    Confidence: {Math.round(opp.eligibility.confidence * 100)}%
+                  </span>
+                </div>
+                {opp.eligibility.signals.length > 0 && (
+                  <ul style={{ margin: 0, paddingLeft: "1.1rem", fontSize: "0.8rem", lineHeight: 1.5 }}>
+                    {opp.eligibility.signals.map((s) => (
+                      <li key={s.criterion} style={{ color: s.status === "mismatch" ? "#991b1b" : s.status === "unknown" ? "#854d0e" : "#166534" }}>
+                        {s.detail}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {opp.eligibility.unknown_requirements.length > 0 && (
+                  <p style={{ margin: "0.4rem 0 0", fontSize: "0.75rem", color: "#854d0e" }}>
+                    Unknown requirements: {opp.eligibility.unknown_requirements.join("; ")}
+                  </p>
+                )}
+              </div>
+            )}
+
             <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem", alignItems: "center" }}>
-              <span style={{ fontSize: "0.8rem", color: "#9ca3af" }}>Confidence: {Math.round(opp.confidence * 100)}%</span>
+              <span style={{ fontSize: "0.8rem", color: "#9ca3af" }}>Extraction: {Math.round(opp.confidence * 100)}%</span>
               <div style={{ flex: 1 }} />
               {isApproved ? (
                 <span style={{ color: "#16a34a", fontSize: "0.85rem", fontWeight: 500 }}>&#10003; Approved</span>

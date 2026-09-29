@@ -25,6 +25,9 @@ out/
 dist/
 build/
 
+# Personal student profile (copy from student_profile.example.json)
+student_profile.json
+
 # IDE
 .vscode/
 .idea/

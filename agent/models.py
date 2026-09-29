@@ -1,11 +1,82 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import ClassVar, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
 from agent.config import VALID_OPPORTUNITY_TYPES
+
+
+class OpportunityRequirements(BaseModel):
+    """Eligibility criteria EXPLICITLY stated in the opportunity email.
+
+    Every field is optional and defaults to ``None``. ``None`` means "the email
+    did not state this requirement" -- it must never be interpreted as "no
+    requirement" or as a satisfied requirement.
+
+    Year semantics are deliberately two separate fields:
+    ``eligible_years`` is a CLOSED list ("2nd year only" -> ``[2]``), while
+    ``min_eligible_year`` is an inclusive lower bound ("2nd year or above" ->
+    ``2``). They are never interchangeable, and a single-element
+    ``eligible_years`` is never treated as an open range.
+    """
+
+    eligible_degrees: Optional[list[str]] = None
+    eligible_years: Optional[list[int]] = None
+    min_eligible_year: Optional[int] = None
+    min_cgpa: Optional[float] = None
+    max_cgpa: Optional[float] = None
+    min_graduation_year: Optional[int] = None
+    max_graduation_year: Optional[int] = None
+    required_skills: Optional[list[str]] = None
+    preferred_skills: Optional[list[str]] = None
+    allowed_locations: Optional[list[str]] = None
+    other_requirements: Optional[list[str]] = None
+    source_quote: Optional[str] = None
+
+    #: Fields that represent an actual eligibility criterion. ``source_quote``
+    #: is provenance metadata, not something a student can match against.
+    CRITERION_FIELDS: ClassVar[tuple[str, ...]] = (
+        "eligible_degrees",
+        "eligible_years",
+        "min_eligible_year",
+        "min_cgpa",
+        "max_cgpa",
+        "min_graduation_year",
+        "max_graduation_year",
+        "required_skills",
+        "preferred_skills",
+        "allowed_locations",
+        "other_requirements",
+    )
+
+    def stated_criteria(self) -> list[str]:
+        """Names of criteria the email explicitly mentions."""
+        return [f for f in self.CRITERION_FIELDS if getattr(self, f, None) is not None]
+
+    def is_empty(self) -> bool:
+        return not self.stated_criteria()
+
+
+class CriterionResult(BaseModel):
+    """Outcome of comparing one requirement against the student profile."""
+
+    criterion: str
+    status: str  # "match" | "mismatch" | "unknown"
+    detail: str
+
+
+class EligibilityResult(BaseModel):
+    """Deterministic match outcome. Never produced by an LLM directly."""
+
+    match_score: Optional[int] = None
+    eligibility: str = "unknown"
+    matching_factors: list[str] = Field(default_factory=list)
+    potential_gaps: list[str] = Field(default_factory=list)
+    unknown_requirements: list[str] = Field(default_factory=list)
+    signals: list[CriterionResult] = Field(default_factory=list)
+    confidence: float = Field(ge=0.0, le=1.0, default=0.0)
 
 
 class Opportunity(BaseModel):
@@ -18,6 +89,11 @@ class Opportunity(BaseModel):
     summary: Optional[str] = None
     confidence: float = Field(ge=0.0, le=1.0, default=0.0)
     source_email_id: Optional[str] = None
+
+    # Additive eligibility layer. Both default to None so every existing
+    # payload (Notion/Calendar/frontend round-trips) stays valid.
+    requirements: Optional[OpportunityRequirements] = None
+    eligibility: Optional[EligibilityResult] = None
 
     @field_validator("type")
     @classmethod

@@ -11,6 +11,8 @@ from agent.gemini import extract_opportunity, GeminiUnavailable
 from agent.dedup import is_duplicate
 from agent.notion import query_existing
 from agent.state import is_processed
+from agent.profile import load_profile
+from agent.eligibility import evaluate_eligibility
 
 
 OPPORTUNITY_SIGNALS = [
@@ -73,6 +75,10 @@ def scan_emails(limit: int = DEFAULT_SCAN_LIMIT) -> ScanResult:
     locally_filtered = 0
 
     processed_count = 0
+
+    # Loaded once per scan. Eligibility scoring below is a pure local
+    # computation, so it adds no Gemini requests and no quota usage.
+    student_profile = load_profile()
 
     for i, email in enumerate(emails):
         # Check if this email was already approved or rejected
@@ -140,6 +146,13 @@ def scan_emails(limit: int = DEFAULT_SCAN_LIMIT) -> ScanResult:
             )
             print(f"[STAGE] DEDUP {i+1}/{len(emails)} {time.time()-t4:.1f}s", flush=True)
             opp.is_opportunity = not dup["is_duplicate"]
+
+        # Eligibility/match score: deterministic, local, no AI call.
+        # Runs only for opportunities that survived dedup, so it can never
+        # add work to the Gemini quota path.
+        if opp.is_opportunity:
+            opp.eligibility = evaluate_eligibility(opp.requirements, student_profile)
+
         opportunities.append(opp)
 
     total = time.time() - t_start
@@ -168,5 +181,7 @@ def get_pending_confirmations(scan_result: ScanResult) -> list[dict]:
             "summary": opp.summary,
             "confidence": opp.confidence,
             "source_email_id": opp.source_email_id,
+            "requirements": opp.requirements.model_dump() if opp.requirements else None,
+            "eligibility": opp.eligibility.model_dump() if opp.eligibility else None,
         })
     return results

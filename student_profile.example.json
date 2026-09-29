@@ -1,0 +1,21 @@
+{
+  "degree": "BCA",
+  "year": 2,
+  "graduation_year": 2028,
+  "skills": [
+    "Python",
+    "Java",
+    "AWS",
+    "GCP",
+    "Git",
+    "Cloud",
+    "DevOps"
+  ],
+  "interests": [
+    "Cloud",
+    "DevOps",
+    "AI"
+  ],
+  "location": "India",
+  "cgpa": 8.1
+}
