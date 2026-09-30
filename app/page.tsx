@@ -320,7 +320,7 @@ export default function Home() {
       {scanResult && (
         <div style={{ marginBottom: "1rem", color: "#666" }}>
           Scanned {scanResult.emails_scanned} emails. Found {scanResult.opportunities_found} opportunities.
-          {scanResult.opportunities_found === 0 && " No new opportunities found. Existing opportunities were already in Notion."}
+          {scanResult.opportunities_found === 0 && " No new opportunities found."}
         </div>
       )}
 
