@@ -46,6 +46,18 @@ const DEADLINE_BADGE: Record<string, { bg: string; color: string; bold?: boolean
   no_deadline: { bg: "#f9fafb", color: "#9ca3af" },
 };
 
+// Fixed option text for the deadline filter dropdown. Independent of the
+// per-card badge, which stays contextual (e.g. "3 days left").
+const DEADLINE_LABELS: Record<string, string> = {
+  expired: "Expired",
+  today: "Due today",
+  critical: "Critical",
+  urgent: "Urgent",
+  upcoming: "Upcoming",
+  normal: "Normal",
+  no_deadline: "No deadline",
+};
+
 /**
  * Derive the label purely from backend fields. No date maths here.
  * Returns null when there is nothing safe to show, so a card can never
@@ -93,6 +105,68 @@ const ELIGIBILITY_LABELS: Record<string, { text: string; color: string; bg: stri
   unknown: { text: "Eligibility unknown", color: "#374151", bg: "#e5e7eb" },
 };
 
+const OPPORTUNITY_TYPES = [
+  "internship",
+  "hackathon",
+  "scholarship",
+  "competition",
+  "job",
+  "workshop",
+  "certification",
+  "fellowship",
+];
+
+const ELIGIBILITY_FILTERS = [
+  "likely_eligible",
+  "possible",
+  "unlikely_eligible",
+];
+
+const DEADLINE_FILTERS = [
+  "expired",
+  "today",
+  "critical",
+  "urgent",
+  "upcoming",
+  "normal",
+  "no_deadline",
+];
+
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** Raw deadline status, defaulting to "no_deadline" when absent. No date maths. */
+function deadlineStatusOf(opp: Opportunity): string {
+  return opp.deadline_intelligence?.deadline_status ?? "no_deadline";
+}
+
+/** Raw eligibility verdict, defaulting to "unknown" when absent. */
+function eligibilityOf(opp: Opportunity): string {
+  return opp.eligibility?.eligibility ?? "unknown";
+}
+
+/**
+ * Pure, client-side filter. Never mutates the opportunity and never computes
+ * dates -- it only reads fields the backend already produced.
+ */
+function matchesFilters(
+  opp: Opportunity,
+  query: string,
+  typeFilter: string,
+  eligibilityFilter: string,
+  deadlineFilter: string
+): boolean {
+  if (typeFilter && opp.type !== typeFilter) return false;
+  if (eligibilityFilter && eligibilityOf(opp) !== eligibilityFilter) return false;
+  if (deadlineFilter && deadlineStatusOf(opp) !== deadlineFilter) return false;
+
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const haystack = [opp.name, opp.organization, opp.summary]
+    .map((v) => (typeof v === "string" ? v.toLowerCase() : ""))
+    .join(" ");
+  return haystack.includes(q);
+}
+
 interface ScanResponse {
   status: string;
   scan_id: string;
@@ -113,6 +187,32 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [reviewStatuses, setReviewStatuses] = useState<Record<string, ReviewStatus>>({});
   const [processingCards, setProcessingCards] = useState<Record<string, "approve" | "reject">>({});
+
+  // Phase 3: client-side search + filters. No extra network requests.
+  const [searchQuery, setSearchQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [eligibilityFilter, setEligibilityFilter] = useState("");
+  const [deadlineFilter, setDeadlineFilter] = useState("");
+
+  const hasActiveFilters =
+    searchQuery.trim() !== "" ||
+    typeFilter !== "" ||
+    eligibilityFilter !== "" ||
+    deadlineFilter !== "";
+
+  const clearFilters = () => {
+    setSearchQuery("");
+    setTypeFilter("");
+    setEligibilityFilter("");
+    setDeadlineFilter("");
+  };
+
+  // Filters the same array of original objects; nothing is mutated, so the
+  // Approve/Reject handlers still receive the untouched opportunity.
+  const allOpportunities = scanResult ? scanResult.opportunities : [];
+  const visibleOpportunities = allOpportunities.filter((opp) =>
+    matchesFilters(opp, searchQuery, typeFilter, eligibilityFilter, deadlineFilter)
+  );
 
   const cardKey = (opp: Opportunity): string => opp.source_email_id ?? String(opp.index);
 
@@ -224,7 +324,51 @@ export default function Home() {
         </div>
       )}
 
-      {scanResult && scanResult.opportunities.map((opp) => {
+      {scanResult && scanResult.opportunities.length > 0 && (
+        <div style={{ marginBottom: "1rem", padding: "0.75rem", border: "1px solid #e5e7eb", borderRadius: "8px", backgroundColor: "#f9fafb" }}>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search name, organization, summary..."
+            style={{ width: "100%", boxSizing: "border-box", padding: "0.5rem 0.75rem", border: "1px solid #e5e7eb", borderRadius: "6px", fontSize: "0.9rem", marginBottom: "0.5rem" }}
+          />
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
+            <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} style={{ padding: "0.4rem 0.5rem", border: "1px solid #e5e7eb", borderRadius: "6px", fontSize: "0.8rem", backgroundColor: "white" }}>
+              <option value="">All types</option>
+              {OPPORTUNITY_TYPES.map((t) => (
+                <option key={t} value={t}>{capitalize(t)}</option>
+              ))}
+            </select>
+            <select value={eligibilityFilter} onChange={(e) => setEligibilityFilter(e.target.value)} style={{ padding: "0.4rem 0.5rem", border: "1px solid #e5e7eb", borderRadius: "6px", fontSize: "0.8rem", backgroundColor: "white" }}>
+              <option value="">All eligibility</option>
+              {ELIGIBILITY_FILTERS.map((e) => (
+                <option key={e} value={e}>{ELIGIBILITY_LABELS[e]?.text ?? capitalize(e)}</option>
+              ))}
+            </select>
+            <select value={deadlineFilter} onChange={(e) => setDeadlineFilter(e.target.value)} style={{ padding: "0.4rem 0.5rem", border: "1px solid #e5e7eb", borderRadius: "6px", fontSize: "0.8rem", backgroundColor: "white" }}>
+              <option value="">All deadlines</option>
+              {DEADLINE_FILTERS.map((d) => (
+                <option key={d} value={d}>{DEADLINE_LABELS[d] ?? capitalize(d)}</option>
+              ))}
+            </select>
+            {hasActiveFilters && (
+              <button onClick={clearFilters} style={{ padding: "0.4rem 0.75rem", border: "1px solid #d1d5db", borderRadius: "6px", backgroundColor: "white", fontSize: "0.8rem", cursor: "pointer" }}>Clear filters</button>
+            )}
+          </div>
+          <div style={{ marginTop: "0.5rem", fontSize: "0.8rem", color: "#6b7280" }}>
+            Showing {visibleOpportunities.length} of {allOpportunities.length} opportunities
+          </div>
+        </div>
+      )}
+
+      {scanResult && scanResult.opportunities.length > 0 && visibleOpportunities.length === 0 && (
+        <div style={{ padding: "1rem", border: "1px dashed #d1d5db", borderRadius: "6px", marginBottom: "1rem", color: "#6b7280" }}>
+          No opportunities match your filters.
+        </div>
+      )}
+
+      {scanResult && visibleOpportunities.map((opp) => {
         const key = cardKey(opp);
         const status = reviewStatuses[key] ?? null;
         const action = processingCards[key] ?? null;
@@ -284,8 +428,8 @@ export default function Home() {
                 </div>
                 {opp.eligibility.signals.length > 0 && (
                   <ul style={{ margin: 0, paddingLeft: "1.1rem", fontSize: "0.8rem", lineHeight: 1.5 }}>
-                    {opp.eligibility.signals.map((s) => (
-                      <li key={s.criterion} style={{ color: s.status === "mismatch" ? "#991b1b" : s.status === "unknown" ? "#854d0e" : "#166534" }}>
+                    {opp.eligibility.signals.map((s, index) => (
+                      <li key={`${s.criterion}-${index}`} style={{ color: s.status === "mismatch" ? "#991b1b" : s.status === "unknown" ? "#854d0e" : "#166534" }}>
                         {s.detail}
                       </li>
                     ))}
