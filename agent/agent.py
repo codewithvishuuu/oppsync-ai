@@ -13,6 +13,7 @@ from agent.notion import query_existing
 from agent.state import is_processed
 from agent.profile import load_profile
 from agent.eligibility import evaluate_eligibility
+from agent.deadline import calculate_deadline_intelligence
 
 
 OPPORTUNITY_SIGNALS = [
@@ -153,6 +154,14 @@ def scan_emails(limit: int = DEFAULT_SCAN_LIMIT) -> ScanResult:
         if opp.is_opportunity:
             opp.eligibility = evaluate_eligibility(opp.requirements, student_profile)
 
+        # Deadline intelligence: pure local date arithmetic, no AI call.
+        # Never raises, so one bad deadline cannot abort the scan. Does not
+        # touch opp.deadline, so Notion/Calendar/dedup are unaffected.
+        try:
+            opp.deadline_intelligence = calculate_deadline_intelligence(opp.deadline)
+        except Exception:
+            opp.deadline_intelligence = None
+
         opportunities.append(opp)
 
     total = time.time() - t_start
@@ -183,5 +192,8 @@ def get_pending_confirmations(scan_result: ScanResult) -> list[dict]:
             "source_email_id": opp.source_email_id,
             "requirements": opp.requirements.model_dump() if opp.requirements else None,
             "eligibility": opp.eligibility.model_dump() if opp.eligibility else None,
+            "deadline_intelligence": (
+                opp.deadline_intelligence.model_dump() if opp.deadline_intelligence else None
+            ),
         })
     return results

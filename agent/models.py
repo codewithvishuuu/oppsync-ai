@@ -79,6 +79,20 @@ class EligibilityResult(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0, default=0.0)
 
 
+class DeadlineIntelligence(BaseModel):
+    """Deterministic urgency derived from ``Opportunity.deadline``.
+
+    ``deadline`` itself is the single source of truth and is never modified.
+    See :mod:`agent.deadline` for the status ladder and the date-only
+    semantics.
+    """
+
+    days_remaining: Optional[int] = None
+    deadline_status: str = "no_deadline"
+    urgency: str = "unknown"
+    is_expired: bool = False
+
+
 class Opportunity(BaseModel):
     is_opportunity: bool
     name: Optional[str] = None
@@ -94,6 +108,10 @@ class Opportunity(BaseModel):
     # payload (Notion/Calendar/frontend round-trips) stays valid.
     requirements: Optional[OpportunityRequirements] = None
     eligibility: Optional[EligibilityResult] = None
+
+    # Additive deadline layer. Defaults to None so every existing payload
+    # (Notion/Calendar/frontend round-trips) stays valid.
+    deadline_intelligence: Optional[DeadlineIntelligence] = None
 
     @field_validator("type")
     @classmethod

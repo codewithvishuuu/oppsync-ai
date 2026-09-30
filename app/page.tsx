@@ -18,6 +18,59 @@ interface Eligibility {
   confidence: number;
 }
 
+type DeadlineStatus =
+  | "no_deadline"
+  | "expired"
+  | "today"
+  | "critical"
+  | "urgent"
+  | "upcoming"
+  | "normal";
+
+interface DeadlineIntelligence {
+  days_remaining: number | null;
+  deadline_status: DeadlineStatus;
+  urgency: string;
+  is_expired: boolean;
+}
+
+// Visual weight follows real urgency: strongest warning for today/critical,
+// decaying to neutral. Colours reuse the greys already used in this file.
+const DEADLINE_BADGE: Record<string, { bg: string; color: string; bold?: boolean }> = {
+  today: { bg: "#fee2e2", color: "#991b1b", bold: true },
+  critical: { bg: "#fee2e2", color: "#991b1b", bold: true },
+  urgent: { bg: "#ffedd5", color: "#9a3412" },
+  upcoming: { bg: "#fef9c3", color: "#854d0e" },
+  normal: { bg: "#f3f4f6", color: "#4b5563" },
+  expired: { bg: "#e5e7eb", color: "#4b5563" },
+  no_deadline: { bg: "#f9fafb", color: "#9ca3af" },
+};
+
+/**
+ * Derive the label purely from backend fields. No date maths here.
+ * Returns null when there is nothing safe to show, so a card can never
+ * render "undefined days left".
+ */
+function deadlineLabel(di: DeadlineIntelligence): string | null {
+  const days = typeof di.days_remaining === "number" ? di.days_remaining : null;
+  switch (di.deadline_status) {
+    case "expired":
+      return "Expired";
+    case "today":
+      return "Due today";
+    case "critical":
+    case "urgent":
+    case "upcoming":
+    case "normal":
+      if (days === null) return null;
+      return days === 1 ? "1 day left" : `${days} days left`;
+    case "no_deadline":
+      return "No deadline";
+    default:
+      return null;
+  }
+}
+
 interface Opportunity {
   index: number;
   name: string | null;
@@ -30,6 +83,7 @@ interface Opportunity {
   source_email_id: string | null;
   requirements?: unknown | null;
   eligibility?: Eligibility | null;
+  deadline_intelligence?: DeadlineIntelligence | null;
 }
 
 const ELIGIBILITY_LABELS: Record<string, { text: string; color: string; bg: string }> = {
@@ -196,6 +250,17 @@ export default function Home() {
 
             {opp.organization && <p style={{ margin: "0.25rem 0", color: "#374151" }}><strong>Organization:</strong> {opp.organization}</p>}
             {opp.deadline && <p style={{ margin: "0.25rem 0", color: "#374151" }}><strong>Deadline:</strong> {opp.deadline}</p>}
+            {opp.deadline_intelligence && (() => {
+              const di = opp.deadline_intelligence!;
+              const label = deadlineLabel(di);
+              if (!label) return null;
+              const s = DEADLINE_BADGE[di.deadline_status] ?? DEADLINE_BADGE.normal;
+              return (
+                <p style={{ margin: "0.25rem 0" }}>
+                  <span style={{ padding: "0.1rem 0.4rem", borderRadius: "4px", fontSize: "0.75rem", backgroundColor: s.bg, color: s.color, fontWeight: s.bold ? 600 : 400 }}>{label}</span>
+                </p>
+              );
+            })()}
             {opp.url && <p style={{ margin: "0.25rem 0" }}><a href={opp.url} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb" }}>{opp.url}</a></p>}
             {opp.summary && <p style={{ margin: "0.5rem 0", color: "#6b7280", fontSize: "0.9rem" }}>{opp.summary}</p>}
 
